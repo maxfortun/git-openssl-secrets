@@ -1,1 +1,2 @@
 secrets/** filter=openssl diff=openssl
+.gitattributes !filter !diff
