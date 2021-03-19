@@ -24,14 +24,22 @@ if [ ! -f $CONFIG_DIR/openssl-password ]; then
     chmod og-rwx $CONFIG_DIR/openssl-password
 fi
 
-filter_path=filters/openssl
-[ -d "$repo/.git/$filter_path" ] || mkdir -p "$repo/.git/$filter_path"
-for filter in clean smudge diff; do
-    cp $SD/git/$filter_path/$filter.sh $repo/.git/$filter_path/$filter.sh
+path=filter/openssl
+[ -d "$repo/.git/$path" ] || mkdir -p "$repo/.git/$path"
+for filter in clean smudge; do
+    cp $SD/git/$path/$filter.sh $repo/.git/$path/$filter.sh
     git config --unset-all filter.openssl.$filter || true
-    git config --add filter.openssl.$filter .git/$filter_path/$filter.sh
+    git config --add filter.openssl.$filter .git/$path/$filter.sh
 done
 git config filter.openssl.required true
+
+path=diff/openssl
+[ -d "$repo/.git/$path" ] || mkdir -p "$repo/.git/$path"
+for diff in textconv; do
+    cp $SD/git/$path/$diff.sh $repo/.git/$path/$diff.sh
+    git config --unset-all diff.openssl.$diff || true
+    git config --add diff.openssl.$diff .git/$path/$diff.sh
+done
 
 if [ -f "$repo/.gitattributes" ]; then
     backup="$repo/.gitattributes.$(date +%Y%m%d%H%M%S)"
