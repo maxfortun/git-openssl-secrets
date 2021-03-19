@@ -31,6 +31,7 @@ for filter in clean smudge diff; do
     git config --unset-all filter.openssl.$filter || true
     git config --add filter.openssl.$filter .git/$filter_path/$filter.sh
 done
+git config filter.openssl.required true
 
 if [ -f "$repo/.gitattributes" ]; then
     backup="$repo/.gitattributes.$(date +%Y%m%d%H%M%S)"
