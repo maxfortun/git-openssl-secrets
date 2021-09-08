@@ -9,6 +9,8 @@ if [ ! -d $repo/.git ]; then
     exit 1
 fi
 
+#git reset --hard
+
 . $SD/git-setenv-openssl-secrets.sh
 
 cp $SD/git-setenv-openssl-secrets.sh $repo/.git/
