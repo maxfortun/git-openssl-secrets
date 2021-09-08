@@ -1,4 +1,5 @@
 #!/bin/bash -e
+
 SD=$(dirname $0)
 
 repo=${1:-.}
@@ -8,28 +9,16 @@ if [ ! -d $repo/.git ]; then
     exit 1
 fi
 
-CONFIG_DIR="$HOME/.config/git"
+. $SD/git-setenv-openssl-secrets.sh
 
-[ -d "$CONFIG_DIR" ] || mkdir -p "$CONFIG_DIR" && chmod og-rwx "$CONFIG_DIR"
-
-if [ ! -f $CONFIG_DIR/openssl-salt ]; then
-    echo "Looks like you do not yet have salt for your secrets. Generating."
-    openssl rand -hex 8 > $CONFIG_DIR/openssl-salt
-    chmod og-rwx $CONFIG_DIR/openssl-salt
-fi
-
-if [ ! -f $CONFIG_DIR/openssl-password ]; then
-    echo "Looks like you do not yet have a password for your secrets. Generating."
-    openssl rand -base64 32 > $CONFIG_DIR/openssl-password
-    chmod og-rwx $CONFIG_DIR/openssl-password
-fi
+cp $SD/git-setenv-openssl-secrets.sh $repo/.git/
 
 path=filter/openssl
 [ -d "$repo/.git/$path" ] || mkdir -p "$repo/.git/$path"
 for filter in clean smudge; do
     cp $SD/git/$path/$filter.sh $repo/.git/$path/$filter.sh
     git config --unset-all filter.openssl.$filter || true
-    git config --add filter.openssl.$filter .git/$path/$filter.sh
+    git config --add filter.openssl.$filter ".git/$path/$filter.sh %f"
 done
 git config filter.openssl.required true
 
@@ -43,10 +32,17 @@ done
 
 if [ -f "$repo/.gitattributes" ]; then
     backup="$repo/.gitattributes.$(date +%Y%m%d%H%M%S)"
-    cp "$repo/.gitattributes" "$backup"
+    mv "$repo/.gitattributes" "$backup"
+    cat "$backup" | sort -fu > "$backup.sorted"
     cat $SD/gitattributes "$backup" | sort -fu > $repo/.gitattributes
+	diff -q $SD/gitattributes "$backup.sorted" 2>/dev/null || mv "$backup" "$repo/.gitattributes"
+	rm "$backup.sorted"
 else
     cp $SD/gitattributes "$repo/.gitattributes"
 fi
 
+cd $repo
+git add .gitattributes
+git ls-files --modified | grep -v .gitattributes | xargs -L1 git checkout HEAD -- 
+cd -
 
