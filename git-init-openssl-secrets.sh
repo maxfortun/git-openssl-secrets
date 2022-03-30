@@ -47,10 +47,10 @@ git add .gitattributes
 
 git ls-files --modified | grep -v .gitattributes | xargs -L1 git checkout HEAD -- 
 
-git stash save
+git stash save || true
 rm .git/index
 git checkout HEAD -- .
-git stash pop
+git stash pop || true
 
 cd -
 
