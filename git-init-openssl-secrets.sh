@@ -42,7 +42,15 @@ else
 fi
 
 cd $repo
+
 git add .gitattributes
+
 git ls-files --modified | grep -v .gitattributes | xargs -L1 git checkout HEAD -- 
+
+git stash save
+rm .git/index
+git checkout HEAD -- .
+git stash pop
+
 cd -
 
