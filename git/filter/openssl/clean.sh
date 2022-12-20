@@ -6,5 +6,5 @@ if [ "$GIT_FILTER_OPENSSL_DEBUG" = "true" ]; then
 	set -x
 fi
 
-openssl enc -aes-256-cbc -base64 -pbkdf2 -S $GIT_FILTER_OPENSSL_SALT -k $GIT_FILTER_OPENSSL_PASSWORD
+openssl enc -aes-256-cbc -base64 -S $GIT_FILTER_OPENSSL_SALT -k $GIT_FILTER_OPENSSL_PASSWORD
 
