@@ -8,5 +8,5 @@ fi
 
 TMP_FILE=/tmp/$(basename $0).$$
 cat > $TMP_FILE
-cat $TMP_FILE | openssl enc -d -aes-256-cbc -base64 -k $GIT_FILTER_OPENSSL_PASSWORD 2> /dev/null || cat $TMP_FILE
+cat $TMP_FILE | openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 -base64 -k $GIT_FILTER_OPENSSL_PASSWORD 2> /dev/null || cat $TMP_FILE
 rm $TMP_FILE
