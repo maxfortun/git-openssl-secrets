@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 SD=$(dirname $0)
 
@@ -7,6 +7,12 @@ if [ ! -d $repo/.git ]; then
     echo "Not in a git directory and no git directory passed in a parameters."
     echo "Usage: $0 [dir]"
     exit 1
+fi
+
+opensslVersion=$(openssl version)
+if ! echo "$opensslVersion" | grep -q 'OpenSSL 3'; then
+	echo "OpenSSL 3 is required. Found: $opensslVersion"
+	exit 1
 fi
 
 cd $repo
