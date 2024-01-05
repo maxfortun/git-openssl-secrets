@@ -55,8 +55,8 @@ fi
 
 cd $repo
 
-git add .gitattributes
-git add $SECRETS
+git add .gitattributes $SECRETS
+git commit -m init .gitattributes $SECRETS
 
 git ls-files --modified | grep -v .gitattributes | xargs -L1 git checkout HEAD -- 
 
