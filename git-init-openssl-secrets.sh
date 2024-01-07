@@ -55,8 +55,10 @@ fi
 
 cd $repo
 
-git add .gitattributes $SECRETS
-git commit -m init .gitattributes $SECRETS
+if ! git status --porcelain .gitattributes $SECRETS | grep -q '^[ ]*[^ ]'; then
+	git add .gitattributes $SECRETS
+	git commit -m init .gitattributes $SECRETS
+fi
 
 git ls-files --modified | grep -v .gitattributes | xargs -L1 git checkout HEAD -- 
 
