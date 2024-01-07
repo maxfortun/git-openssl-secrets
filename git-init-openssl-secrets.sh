@@ -55,7 +55,7 @@ fi
 
 cd $repo
 
-if ! git status --porcelain .gitattributes $SECRETS | grep -q '^[ ]*[^ ]'; then
+if git status --porcelain .gitattributes $SECRETS | grep -q '^[ ]*[^ ]'; then
 	git add .gitattributes $SECRETS
 	git commit -m init .gitattributes $SECRETS
 fi
