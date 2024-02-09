@@ -42,3 +42,12 @@ ln -s git-setenv-openssl-secrets-fs.sh git-setenv-openssl-secrets.sh
 cd into a git repo with secrets and run [git-init-openssl-secrets.sh](git-init-openssl-secrets.sh).  
 If you want other files encrypted as well, add them to `.gitattributes`.   
 
+### Compatibility note
+When mixing older and newer openssl versions, like 1.x and 3.x, the defaults in these versions are different, and should not be relied on. Specify parameters like md and salt explicitly. To find each versions default md, run on different systems:
+```
+touch testfile
+openssl dgst testfile
+```
+The output first token will be the default md used. On my systems t is MD5 for 1.0.2k, and SHA256 for 3.0.8.
+
+
