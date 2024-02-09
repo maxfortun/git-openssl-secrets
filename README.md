@@ -48,6 +48,6 @@ When mixing older and newer openssl versions, like 1.x and 3.x, the defaults in 
 touch testfile
 openssl dgst testfile
 ```
-The output's first token will be the default md used. On my systems t is MD5 for 1.0.2k, and SHA256 for 3.0.8.
+The output's first token will be the default md used. On my systems it is MD5 for 1.0.2k, and SHA256 for 3.0.8.
 
 
