@@ -6,7 +6,15 @@ if [ "$GIT_FILTER_OPENSSL_DEBUG" = "true" ]; then
 	set -x
 fi
 
-TMP_FILE=/tmp/$(basename $0).$$
-cat > $TMP_FILE
-cat $TMP_FILE | openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 -base64 -salt -S $GIT_FILTER_OPENSSL_SALT -k $GIT_FILTER_OPENSSL_PASSWORD 2> /dev/null || cat $TMP_FILE
-rm $TMP_FILE
+TMP_FILE="/tmp/$(basename $0).$$"
+cat > "$TMP_FILE"
+cat "$TMP_FILE" | base64 -d > "$TMP_FILE.decoded"
+
+# Legacy support.
+if ! grep -q ^Salted__ "$TMP_FILE.decoded"; then
+    SALT_PARAMS="-S $GIT_FILTER_OPENSSL_SALT"
+fi
+
+openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 $SALT_PARAMS -k $GIT_FILTER_OPENSSL_PASSWORD -in "$TMP_FILE.decoded" 2> /dev/null || cat "$TMP_FILE"
+
+rm "$TMP_FILE"*
