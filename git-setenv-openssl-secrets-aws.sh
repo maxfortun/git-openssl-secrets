@@ -1,6 +1,6 @@
 cache=${BASH_SOURCE[0]}.cache
 
-if [ ! -f $cache ]; then
+if [ ! -f $cache ] || [ "$GIT_FILTER_OPENSSL_CACHE" = "false" ]; then
 	AWS=aws
 	AWS_SSM_PREFIX=/git-secrets/openssl
 
