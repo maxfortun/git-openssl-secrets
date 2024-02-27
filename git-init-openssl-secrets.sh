@@ -17,8 +17,6 @@ fi
 
 cd $repo
 
-. $SD/git-setenv-openssl-secrets.sh
-
 SECRETS=.secrets
 
 [ -d $SECRETS ] || mkdir $SECRETS
