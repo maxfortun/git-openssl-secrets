@@ -7,7 +7,7 @@ fi
 
 [ ! -f .secrets/git-setenv-openssl-secrets.sh ] || . .secrets/git-setenv-openssl-secrets.sh
 
-TMP_FILE="/tmp/$(basename $0).$$"
+TMP_FILE="/tmp/$(basename $0).$LOGNAME.$$"
 cat > "$TMP_FILE"
 
 if cat "$TMP_FILE" | base64 -d > "$TMP_FILE.decoded" 2>/dev/null; then
