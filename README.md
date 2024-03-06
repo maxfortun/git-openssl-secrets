@@ -43,11 +43,16 @@ cd into a git repo with secrets and run [git-init-openssl-secrets.sh](git-init-o
 If you want other files encrypted as well, add them to `.gitattributes`.   
 
 ### Compatibility note
-When mixing older and newer openssl versions, like 1.x and 3.x, the defaults in these versions are different, and should not be relied on. Specify parameters like md and salt explicitly. To find each versions default md, run on different systems:
+When mixing older and newer openssl versions, like 1.x and 3.x, the defaults in these versions are different, and should not be relied on.  
+Specify parameters like md and salt explicitly.  
+To find each versions default md, run on different systems:
 ```
 touch testfile
 openssl dgst testfile
 ```
-The output's first token will be the default md used. On my systems it is MD5 for 1.0.2k, and SHA256 for 3.0.8.
+The output's first token will be the default md used. On my systems it is MD5 for 1.0.2k, and SHA256 for 3.0.8.  
+
+Another thing to keep in mind is that openssl 1.x will write a `Salted__` header in the encrypted content, while openssl 3.x will not.  
+To keep git happy and have both versions of ssl compatible with one another we can backfill the `Salted__` header in the [clean filter](https://github.com/maxfortun/git-openssl-secrets/blob/bb4cc3a0bd12ecb9f30c438a57f5ce19057e3195/git/filter/openssl/clean.sh#L15-L19). 
 
 
