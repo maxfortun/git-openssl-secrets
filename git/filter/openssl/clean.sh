@@ -5,6 +5,14 @@ if [ "$GIT_FILTER_OPENSSL_DEBUG" = "true" ]; then
 	set -x
 fi
 
+trackingDir=".git/filter/openssl/tracking"
+trackingFile="$trackingDir/$file"
+
+if [ -f "$trackingFile" ]; then
+	cat
+	exit 0
+fi
+
 [ ! -f .secrets/git-setenv-openssl-secrets.sh ] || . .secrets/git-setenv-openssl-secrets.sh
 
 TMP_FILE="/tmp/$(basename $0).$LOGNAME.$$"

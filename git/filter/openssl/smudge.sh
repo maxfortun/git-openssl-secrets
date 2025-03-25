@@ -22,3 +22,10 @@ else
 	cat "$TMP_FILE"
 fi
 rm "$TMP_FILE"*
+
+trackingDir=".git/filter/openssl/tracking"
+trackingFile="$trackingDir/$file"
+trackingFileDir="$(dirname $trackingFile)"
+[ -d "$trackingFileDir" ] || mkdir -p "$trackingFileDir"
+touch "$trackingFile"
+
