@@ -13,7 +13,7 @@ cat > "$TMP_FILE"
 if cat "$TMP_FILE" | base64 -d > "$TMP_FILE.decoded" 2>/dev/null; then
 
 	# Legacy support.
-	if ! grep -q ^Salted__ "$TMP_FILE.decoded"; then
+	if ! head -1 "$TMP_FILE.decoded" | cut -b1-8 | grep -q ^Salted__; then
     	SALT_PARAMS="-S $GIT_FILTER_OPENSSL_SALT"
 	fi
 
