@@ -8,10 +8,12 @@ fi
 trackingDir=".git/filter/openssl/tracking"
 trackingFile="$trackingDir/$file"
 
-if [ -f "$trackingFile" ]; then
+if [ ! -f "$trackingFile" ] && git ls-files --error-unmatch $file 2>/dev/null; then
 	cat
 	exit 0
 fi
+
+touch $trackingFile
 
 [ ! -f .secrets/git-setenv-openssl-secrets.sh ] || . .secrets/git-setenv-openssl-secrets.sh
 
