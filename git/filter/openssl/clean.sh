@@ -14,6 +14,8 @@ if [ ! -f "$trackingFile" ] && git ls-files --error-unmatch $file 1>/dev/null 2>
 	exit 0
 fi
 
+trackingFileDir="$(dirname $trackingFile)"
+[ -d "$trackingFileDir" ] || mkdir -p "$trackingFileDir"
 touch $trackingFile
 
 [ ! -f .secrets/git-setenv-openssl-secrets.sh ] || . .secrets/git-setenv-openssl-secrets.sh
