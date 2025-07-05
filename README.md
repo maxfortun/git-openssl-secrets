@@ -55,4 +55,9 @@ The output's first token will be the default md used. On my systems it is MD5 fo
 Another thing to keep in mind is that openssl 1.x will write a `Salted__` header in the encrypted content, while openssl 3.x will not.  
 To keep git happy and have both versions of ssl compatible with one another we can backfill the `Salted__` header in the [clean filter](https://github.com/maxfortun/git-openssl-secrets/blob/bb4cc3a0bd12ecb9f30c438a57f5ce19057e3195/git/filter/openssl/clean.sh#L15-L19). 
 
+### Removing accidentally committed unencrypted files
+```
+git-rm-history.sh
+```
+
 
