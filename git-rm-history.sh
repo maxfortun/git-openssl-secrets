@@ -4,7 +4,8 @@ pattern="$1"
 if [ -z "$pattern" ]; then
 	echo "Removes file(s) from git history"
 	echo "Usage: $0 <pattern>"
-	echo " e.g.: $0 \\.tfstate\\\$"
+	echo " e.g.: $0 ^secrets/"
+	echo "     : $0 \\.tfstate\\\$"
 	exit 1
 fi
 
