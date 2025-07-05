@@ -10,7 +10,7 @@ if [ -z "$pattern" ]; then
 fi
 
 paths=$(git log --pretty=format: --name-status | cut -f2- | sort -u|grep "$pattern")
-read -p "$paths"$'\n'"These files will be completely removed from git history. Are you sure? (no/yes) " response
+read -p "$paths"$'\n'"---"$'\n'"These files will be completely removed from git history."$'\n'"There is no undoing this operation."$'\n'"Are you sure? (no/yes) " response
 if [ "$response" != "yes" ]; then
 	echo "Aborted."
 	exit 1
