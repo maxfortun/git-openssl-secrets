@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 file=$1
 
 if [ "$GIT_FILTER_OPENSSL_DEBUG" = "true" ]; then

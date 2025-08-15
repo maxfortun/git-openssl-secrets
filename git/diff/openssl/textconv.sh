@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 
 if [ "$GIT_FILTER_OPENSSL_DEBUG" = "true" ]; then
 	echo $0 $* >&2
