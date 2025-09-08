@@ -2,7 +2,7 @@
 
 SD=$(dirname $0)
 
-repo=${1:-.}
+repo=$(cd ${1:-.}; pwd)
 if [ ! -d $repo/.git ]; then 
 	echo "Not in a git directory and no git directory passed in a parameters."
 	echo "Usage: $0 [dir]"
@@ -73,5 +73,5 @@ if git status|grep modified; then
 	fi
 fi
 
-cd -
+cd $OLDPWD
 
