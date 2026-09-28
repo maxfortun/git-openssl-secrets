@@ -20,3 +20,11 @@ jobs:
         if: runner.os == 'Linux'
         run: command -v dash || sudo apt-get install -y dash
       - run: test/run.sh
+
+  openssl-1_1:
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    steps:
+      - run: apt-get update -qq && apt-get install -y -qq git openssl
+      - uses: actions/checkout@v4
+      - run: test/run.sh

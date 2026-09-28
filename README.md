@@ -76,6 +76,8 @@ To keep git happy and have both versions of ssl compatible with one another the 
 
 Earlier versions of the clean filter wrote a corrupted header when `/bin/sh` was macOS's sh or dash, whose `echo` doesn't support `-n`/`-e`. Those files could not be decrypted. They now decrypt, and are rewritten in the correct format the next time they change.  
 
+The filters work with OpenSSL 1.1.1, OpenSSL 3 and LibreSSL 3, and all of them read and write identical files; `test/run.sh` checks every openssl it finds. OpenSSL 1.0.2 and older lack `-pbkdf2` and can't be used. Only `git-init-openssl-secrets.sh` insists on OpenSSL 3.  
+
 The password is passed to openssl through the environment rather than the command line, so other local users can't see it in `ps`.  
 
 ### Removing accidentally committed unencrypted files

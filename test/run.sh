@@ -475,10 +475,34 @@ once_rm_history() {
 	grep -q rotate "$T/out" || fail "no rotation advice"
 }
 
+# The filters with every openssl found, e.g. LibreSSL as macOS's /usr/bin/openssl,
+# or those listed in TEST_OPENSSL_BINARIES. Only init insists on OpenSSL 3.
+once_filters_work_with_other_openssl_versions() {
+	binaries=${TEST_OPENSSL_BINARIES:-$( (type -ap openssl; echo /usr/bin/openssl) | awk '!seen[$0]++')}
+	export GIT_FILTER_OPENSSL_SALT=$SALT GIT_FILTER_OPENSSL_PASSWORD=$PW
+	for bin in $binaries; do
+		[ -x "$bin" ] || continue
+		version=$("$bin" version)
+		mkdir -p "$T/bin"
+		ln -sf "$bin" "$T/bin/openssl"
+		(
+			PATH=$T/bin:$PATH
+			. "$ROOT/git/filter/openssl/common.sh"
+			OPENSSL_SECRETS_TMP=$(mktemp -d)
+			for f in "$FIXTURES"/*.b64; do
+				openssl_secrets_decrypt "$f" "$T/out" || fail "$version: cannot decrypt $(basename "$f")"
+				assert_file_eq "$FIXTURES/plain" "$T/out"
+			done
+			openssl_secrets_encrypt "$FIXTURES/plain" > "$T/enc"
+			assert_file_eq "$FIXTURES/legacy-bash.b64" "$T/enc"
+		)
+		echo "ok with $version"
+	done
+}
+
 # ---------------------------------------------------------------- runner
 
-command -v openssl > /dev/null && openssl version | grep -Eq '^OpenSSL ([3-9]|[1-9][0-9])\.' ||
-	{ echo "OpenSSL 3 or newer must be first on PATH, found: $(openssl version 2>&1)"; exit 1; }
+command -v openssl > /dev/null || { echo "openssl not found"; exit 1; }
 
 shells=
 for sh in ${TEST_SHELLS:-default dash bash}; do
@@ -487,6 +511,12 @@ done
 
 all=$(declare -F | awk '{print $3}' | grep -E '^(test|once)_')
 selected=${*:-$all}
+
+# Init requires OpenSSL 3, so with an older one only the filters can be tested.
+if ! openssl version | grep -Eq '^OpenSSL ([3-9]|[1-9][0-9])\.'; then
+	echo "$(openssl version) is first on PATH, testing the filters only. Put OpenSSL 3 first to run everything."
+	selected=once_filters_work_with_other_openssl_versions
+fi
 
 pass=0
 failed=()

@@ -83,7 +83,7 @@ openssl_secrets_decrypt() {
 				_n=$(($(wc -c < "$_t/prefix")))
 				if head -c "$_n" "$_t/raw" | cmp -s - "$_t/prefix"; then
 					tail -c +$((_n + 1)) "$_t/raw" > "$_t/ct"
-					openssl_secrets_decrypt_ct -S "$GIT_FILTER_OPENSSL_SALT"
+					openssl_secrets_decrypt_salted
 					return
 				fi
 			done
@@ -100,7 +100,20 @@ openssl_secrets_decrypt() {
 	# Legacy: bare ciphertext encrypted with the configured salt.
 	[ -n "$GIT_FILTER_OPENSSL_SALT" ] || return 1
 	cp "$_t/raw" "$_t/ct"
-	openssl_secrets_decrypt_ct -S "$GIT_FILTER_OPENSSL_SALT" || return 1
+	openssl_secrets_decrypt_salted || return 1
+}
+
+# Decrypts bare ciphertext $_t/ct encrypted with the configured salt.
+openssl_secrets_decrypt_salted() {
+	# OpenSSL 1.x and LibreSSL ignore -S when decrypting and always expect a
+	# header, so rebuild the standard one. It only fits an 8 byte salt.
+	if [ $(($(wc -c < "$_t/s1"))) -eq 8 ]; then
+		cat "$_t/h1" "$_t/s1" "$_t/ct" > "$_t/ct.salted"
+		mv "$_t/ct.salted" "$_t/ct"
+		openssl_secrets_decrypt_ct
+	else
+		openssl_secrets_decrypt_ct -S "$GIT_FILTER_OPENSSL_SALT"
+	fi
 }
 
 # Decrypts $_t/ct into $_out. Extra args are passed to openssl.
