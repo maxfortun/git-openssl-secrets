@@ -1,24 +1,17 @@
 #!/bin/sh -e
 
 if [ "$GIT_FILTER_OPENSSL_DEBUG" = "true" ]; then
-	echo $0 $* >&2
+	echo "$0 $*" >&2
 	set -x
 fi
 
-[ ! -f .secrets/git-setenv-openssl-secrets.sh ] || . .secrets/git-setenv-openssl-secrets.sh
+SD=$(dirname "$0")
+. "$SD/../../filter/openssl/common.sh"
+openssl_secrets_setenv "$SD/../.."
+openssl_secrets_mktemp
 
-TMP_FILE="/tmp/$(basename $0).$$"
-cat "$1" > "$TMP_FILE"
-
-if cat "$TMP_FILE" | base64 -d > "$TMP_FILE.decoded" 2>/dev/null; then
-
-	# Legacy support.
-	if ! grep -q ^Salted__ "$TMP_FILE.decoded"; then
-    	SALT_PARAMS="-S $GIT_FILTER_OPENSSL_SALT"
-	fi
-
-	openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 $SALT_PARAMS -k $GIT_FILTER_OPENSSL_PASSWORD -in "$TMP_FILE.decoded" 2> /dev/null || cat "$TMP_FILE"
+if openssl_secrets_decrypt "$1" "$OPENSSL_SECRETS_TMP/out"; then
+	cat "$OPENSSL_SECRETS_TMP/out"
 else
-	cat "$TMP_FILE"
+	cat "$1"
 fi
-rm "$TMP_FILE"*
