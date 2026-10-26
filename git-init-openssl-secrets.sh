@@ -110,6 +110,9 @@ else
 	cp "$SD/gitattributes" .gitattributes
 fi
 
+[ -d ".git/info" ] || mkdir -p ".git/info"
+cp $SD/gitattributes ".git/info/attributes"
+
 if git status --porcelain .gitattributes $SECRETS | grep -q '^[ ]*[^ ]'; then
 	git add .gitattributes $SECRETS
 	git commit -m init .gitattributes $SECRETS || true
