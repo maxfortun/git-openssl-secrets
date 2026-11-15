@@ -57,9 +57,29 @@ If `.secrets/git-setenv-openssl-secrets.sh.cache` from an older version is commi
 ### Upgrading
 Pull this repo and rerun `git-init-openssl-secrets.sh` in each repo that uses it.  
 Scripts in `.secrets` that match a version from this repo's history are replaced. Scripts you customized are kept, with a notice; `--upgrade` replaces them too.  
-Everything already committed still decrypts, and unchanged files keep their existing blobs, so upgrading causes no spurious diffs. Collaborators still on older versions can decrypt files written by the new one.  
+Everything already committed still decrypts, and unchanged files keep their existing blobs, so upgrading causes no spurious diffs. Collaborators still on older versions can decrypt files written by the new one, as long as the repo stays in the legacy format; see Format and integrity.  
 
 Set `GIT_FILTER_OPENSSL_DEBUG=true` to trace the filters.  
+
+### Format and integrity
+Repos start in the **legacy** format, which every version of these scripts reads. `git-upgrade-openssl-secrets.sh` switches a repo to the **authenticated** format, recorded in the committed `.secrets/format`. Until it is run, nothing changes: the filters never switch formats on their own.  
+
+The authenticated format: `GOS2HMAC` | nonce (8 bytes) | AES-256-CBC ciphertext | HMAC-SHA256 tag (32 bytes), base64 encoded.  
+- The nonce is an HMAC of the file's content, used as the PBKDF2 salt. Output stays deterministic (unchanged files give unchanged blobs), but every file and every version gets its own key and IV. The legacy format uses the configured salt for everything, so all files share one key and IV, and files with the same beginning have the same first ciphertext blocks.  
+- The tag covers everything before it and is checked before decrypting, so a modified blob is refused (left encrypted, with a warning) instead of decrypting to altered content.  
+- The HMAC keys are SHA-256 of a label, the password and the salt. Secrets only go through stdin and environment variables, never command-line arguments.  
+- Recovery without these scripts: drop the first 8 and last 32 bytes, prefix `Salted__`, and decrypt with `openssl enc -d -aes-256-cbc -md sha512 -pbkdf2` (no integrity check that way).  
+
+#### Upgrading a repo
+1. `git-init-openssl-secrets.sh --upgrade`, then commit and push the new `.secrets` scripts, so everyone has scripts that read the new format before any blob uses it. The original scripts (before `common.sh`) can't read it and would write garbage into the working tree.  
+2. `git-openssl-secrets-status.sh` lists files stored in plaintext or the legacy format.  
+3. `git-upgrade-openssl-secrets.sh` - stops without changing anything unless tracked files are committed, the `.secrets` scripts are this version and committed, and **every encrypted file decrypts**. It then writes `.secrets/format`, re-encrypts every file (plaintext ones included) and checks that each decrypts to exactly what it was; otherwise it puts everything back. The result is staged for you to review and commit.  
+4. Plaintext found by `git-openssl-secrets-status.sh --all` in the history stays readable to anyone with the repo: remove it with `git-rm-history.sh` and change the secret.  
+5. Optionally, `GIT_FILTER_OPENSSL_REQUIRE_MAC=true` refuses the legacy format from then on.  
+
+Hard stops, in every format:  
+- A file whose stored version can't be decrypted (wrong password, modified, newer format) is never overwritten: staging an edit to it fails instead.  
+- A `.secrets/format` these scripts don't know (written by a newer version) stops staging until the scripts are upgraded.  
 
 ### Compatibility note
 When mixing older and newer openssl versions, like 1.x and 3.x, the defaults in these versions are different, and should not be relied on.  

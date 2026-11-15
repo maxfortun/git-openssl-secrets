@@ -80,9 +80,46 @@ init_repo() {
 	use_shell
 }
 
-# Decrypts a blob in the canonical format with nothing but openssl.
+# Decrypts a blob with nothing but openssl. Authenticated format (no MAC
+# check here): drop the 8 byte marker and the 32 byte tag; the nonce is the salt.
 openssl_decrypt() {
-	base64 -d | openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 -pass pass:"$PW"
+	local raw len
+	raw=$(mktemp)
+	base64 -d > "$raw"
+	len=$(wc -c < "$raw")
+	if [ "$(head -c 8 "$raw")" = GOS2HMAC ]; then
+		{ printf 'Salted__'; head -c $((len - 32)) "$raw" | tail -c +9; }
+	else
+		cat "$raw"
+	fi | openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 -pass pass:"$PW"
+	rm -f "$raw"
+}
+
+# Switches the repo to the authenticated format, as committed by the upgrade.
+use_authenticated() {
+	printf 'authenticated\n' > .secrets/format
+	git add .secrets/format
+	git commit -qm format
+}
+
+# A blob in the legacy format encrypted with another password.
+foreign_blob() {
+	printf 'not yours\n' | openssl enc -aes-256-cbc -md sha512 -pbkdf2 -S "$SALT" -pass pass:other-password |
+		{ printf 'Salted__'; printf '%b' "$(printf %s "$SALT" | sed 's/../\\x&/g')"; cat; } | base64 | tr -d '\n'
+}
+
+# Base64 blob with the lowest bit of decoded byte $1 flipped.
+tamper() {
+	local raw byte
+	raw=$(mktemp)
+	base64 -d > "$raw"
+	byte=$(head -c $(($1 + 1)) "$raw" | tail -c 1 | od -An -tu1 | tr -d ' ')
+	{
+		head -c "$1" "$raw"
+		printf "\\$(printf %o $((byte ^ 1)))"
+		tail -c +$(($1 + 2)) "$raw"
+	} | base64 | tr -d '\n'
+	rm -f "$raw"
 }
 
 # Commits <blob-file> verbatim as <path>, then checks it out through the filters.
@@ -136,6 +173,143 @@ test_blob_is_deterministic_and_matches_legacy() {
 	assert_file_eq "$FIXTURES/legacy-bash.b64" "$T/blob"
 }
 
+test_authenticated_blob_is_deterministic() {
+	init_repo "$T/repo"
+	use_authenticated
+	mkdir secrets
+	cp "$FIXTURES/plain" secrets/a
+	git add secrets/a
+	git cat-file blob :secrets/a > "$T/blob"
+	assert_file_eq "$FIXTURES/authenticated.b64" "$T/blob"
+}
+
+test_unknown_format_stops() {
+	init_repo "$T/repo"
+	printf 'v9\n' > .secrets/format
+	mkdir secrets
+	echo x > secrets/a
+	git add secrets/a 2> "$T/err" && fail "staged with an unknown format"
+	grep -q "don't know" "$T/err" || fail "$(cat "$T/err")"
+}
+
+test_never_overwrites_undecryptable_secret() {
+	init_repo "$T/repo"
+	mkdir secrets
+	foreign_blob > "$T/foreign"
+	commit_raw_blob "$T/foreign" secrets/a 2> /dev/null
+	assert_file_eq "$T/foreign" secrets/a
+	assert_eq "" "$(git status --porcelain)" "undecryptable file shows as modified"
+	echo replaced > secrets/a
+	git add secrets/a 2> "$T/err" && fail "overwrote a secret it couldn't decrypt"
+	grep -q 'refusing to overwrite' "$T/err" || fail "$(cat "$T/err")"
+	assert_eq "$(cat "$T/foreign")" "$(git cat-file blob :secrets/a)" "staged blob changed"
+}
+
+test_each_file_gets_its_own_key() {
+	init_repo "$T/repo"
+	use_authenticated
+	mkdir secrets
+	# Same first 16 bytes: with one key and IV for all files, the first
+	# ciphertext block would be the same too
+	printf 'ENV=dev\nPASSWORD=one\n' > secrets/a
+	printf 'ENV=dev\nPASSWORD=two\n' > secrets/b
+	git add secrets
+	nonce() { git cat-file blob ":$1" | base64 -d | head -c 32 | tail -c 24 | od -An -tx1 | tr -d ' \n'; }
+	[ "$(nonce secrets/a)" != "$(nonce secrets/b)" ] || fail "files share nonce and first ciphertext block"
+}
+
+test_modified_blob_is_refused() {
+	init_repo "$T/repo"
+	use_authenticated
+	mkdir secrets
+	echo 'pay alice' > secrets/a
+	git add secrets/a
+	git commit -qm a
+	# Flip a byte of the first ciphertext block (after marker and nonce):
+	# CBC would turn that into a controlled change of the next block.
+	git cat-file blob HEAD:secrets/a > "$T/good"
+	# 16: first ciphertext byte; 40: a byte of the tag
+	for offset in 16 40; do
+		rm -f secrets/a
+		tamper $offset < "$T/good" > "$T/tampered"
+		cmp -s "$T/good" "$T/tampered" && fail "tamper changed nothing"
+		commit_raw_blob "$T/tampered" secrets/a 2> "$T/err"
+		grep -q 'cannot decrypt' "$T/err" || fail "offset $offset: no warning: $(cat "$T/err")"
+		assert_file_eq "$T/tampered" secrets/a
+	done
+}
+
+test_require_mac_refuses_old_formats() {
+	init_repo "$T/repo"
+	mkdir secrets
+	commit_raw_blob "$FIXTURES/legacy-bash.b64" secrets/old
+	assert_file_eq "$FIXTURES/plain" secrets/old
+	rm secrets/old
+	GIT_FILTER_OPENSSL_REQUIRE_MAC=true git checkout -- secrets/old 2> "$T/err"
+	assert_file_eq "$FIXTURES/legacy-bash.b64" secrets/old
+	grep -q 'cannot decrypt' "$T/err" || fail "no warning"
+}
+
+test_upgrade_migrates_old_and_plaintext_blobs() {
+	init_repo "$T/repo"
+	mkdir secrets
+	commit_raw_blob "$FIXTURES/legacy-bash.b64" secrets/old
+	cp "$FIXTURES/plain" "$T/plain"
+	commit_raw_blob "$T/plain" secrets/leaked
+	"$TOOL/git-openssl-secrets-status.sh" > "$T/status" && fail "status passed with a plaintext secret"
+	grep -q 'PLAINTEXT  secrets/leaked' "$T/status" || fail "$(cat "$T/status")"
+	grep -q 'legacy     secrets/old' "$T/status" || fail "$(cat "$T/status")"
+
+	"$TOOL/git-upgrade-openssl-secrets.sh" > "$T/out" 2>&1 || fail "$(cat "$T/out")"
+	assert_eq "authenticated" "$(git cat-file blob :.secrets/format)"
+	git commit -qm upgrade
+	"$TOOL/git-openssl-secrets-status.sh" --strict > "$T/status" || fail "$(cat "$T/status")"
+	assert_file_eq "$FIXTURES/authenticated.b64" <(git cat-file blob HEAD:secrets/old)
+	assert_file_eq "$FIXTURES/plain" secrets/old
+	assert_file_eq "$FIXTURES/plain" secrets/leaked
+	assert_eq "" "$(git status --porcelain)" "tree dirty after upgrade"
+	# New files are written in the authenticated format now
+	echo new > secrets/new
+	git add secrets/new
+	assert_eq GOS2HMAC "$(git cat-file blob :secrets/new | base64 -d | head -c 8)"
+	# ...but the history still has the plaintext
+	"$TOOL/git-openssl-secrets-status.sh" --all > "$T/status" && fail "history scan missed the plaintext"
+	grep -q 'PLAINTEXT  secrets/leaked' "$T/status" || fail "$(cat "$T/status")"
+}
+
+test_upgrade_stops_on_undecryptable_secret() {
+	init_repo "$T/repo"
+	mkdir secrets
+	echo fine > secrets/good
+	git add secrets/good
+	git commit -qm good
+	foreign_blob > "$T/foreign"
+	commit_raw_blob "$T/foreign" secrets/bad 2> /dev/null
+	before=$(git rev-parse HEAD:secrets/good)
+	"$TOOL/git-upgrade-openssl-secrets.sh" > "$T/out" 2>&1 && fail "upgraded despite a broken secret"
+	grep -q "can't decrypt: secrets/bad" "$T/out" || fail "$(cat "$T/out")"
+	assert_eq "" "$(git status --porcelain)" "upgrade changed something: $(git status --porcelain)"
+	[ ! -e .secrets/format ] || fail "format written"
+	assert_eq "$before" "$(git rev-parse :secrets/good)" "good secret re-encrypted"
+}
+
+test_upgrade_stops_on_old_scripts_or_dirty_tree() {
+	init_repo "$T/repo"
+	mkdir secrets
+	echo s > secrets/a
+	git add secrets/a
+	git commit -qm a
+	echo changed > secrets/a
+	"$TOOL/git-upgrade-openssl-secrets.sh" > "$T/out" 2>&1 && fail "upgraded a dirty tree"
+	grep -q 'uncommitted changes' "$T/out" || fail "$(cat "$T/out")"
+	git checkout -- secrets/a
+	echo '# customized' >> .secrets/filter/openssl/smudge.sh
+	git commit -qam custom
+	"$TOOL/git-upgrade-openssl-secrets.sh" > "$T/out" 2>&1 && fail "upgraded with other scripts"
+	grep -q 'is not this version' "$T/out" || fail "$(cat "$T/out")"
+	[ ! -e .secrets/format ] || fail "format written"
+}
+
 test_reads_all_legacy_formats() {
 	init_repo "$T/repo"
 	mkdir secrets
@@ -185,6 +359,24 @@ test_legacy_scripts_read_new_blobs() {
 		assert_file_eq "$FIXTURES/plain" "$T/out"
 		GIT_FILTER_OPENSSL_SALT=$SALT GIT_FILTER_OPENSSL_PASSWORD=$PW $sh "$ROOT/test/legacy/textconv.sh" "$T/blob" > "$T/out"
 		assert_file_eq "$FIXTURES/plain" "$T/out"
+	done
+}
+
+# The original scripts can't read the authenticated format. They don't reveal
+# the plaintext, but their output is garbage: hence the upgrade checks.
+test_legacy_scripts_cannot_read_authenticated_blobs() {
+	init_repo "$T/repo"
+	use_authenticated
+	mkdir secrets
+	cp "$FIXTURES/plain" secrets/a
+	git add secrets/a
+	git cat-file blob :secrets/a > "$T/blob"
+	for sh in sh dash bash; do
+		command -v $sh > /dev/null || continue
+		GIT_FILTER_OPENSSL_SALT=$SALT GIT_FILTER_OPENSSL_PASSWORD=$PW $sh "$ROOT/test/legacy/smudge.sh" none < "$T/blob" > "$T/out" || true
+		if grep -qF "$(head -1 "$FIXTURES/plain")" "$T/out"; then fail "legacy smudge revealed the plaintext"; fi
+		GIT_FILTER_OPENSSL_SALT=$SALT GIT_FILTER_OPENSSL_PASSWORD=$PW $sh "$ROOT/test/legacy/textconv.sh" "$T/blob" > "$T/out" || true
+		if grep -qF "$(head -1 "$FIXTURES/plain")" "$T/out"; then fail "legacy textconv revealed the plaintext"; fi
 	done
 }
 
@@ -495,6 +687,8 @@ once_filters_work_with_other_openssl_versions() {
 			done
 			openssl_secrets_encrypt "$FIXTURES/plain" > "$T/enc"
 			assert_file_eq "$FIXTURES/legacy-bash.b64" "$T/enc"
+			OPENSSL_SECRETS_FORMAT=authenticated openssl_secrets_encrypt "$FIXTURES/plain" > "$T/enc"
+			assert_file_eq "$FIXTURES/authenticated.b64" "$T/enc"
 		)
 		echo "ok with $version"
 	done
